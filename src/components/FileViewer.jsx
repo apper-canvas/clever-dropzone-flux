@@ -535,7 +535,7 @@ const FileViewer = ({ isOpen, onClose, file, files, onNavigate }) => {
 
                 {/* Text Viewer */}
                 {(file.type.startsWith('text/') || isTextFile(file.name)) && (
-                  <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-full overflow-auto">
+<div className="bg-white rounded-lg p-6 w-full max-w-4xl h-96 text-viewer-scrollable">
                     <pre className="text-sm font-mono whitespace-pre-wrap break-words">
                       {textContent}
                     </pre>
