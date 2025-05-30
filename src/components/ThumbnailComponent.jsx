@@ -13,7 +13,9 @@ const ThumbnailComponent = ({ file, className = "", loadingThumbnails = new Set(
         className={`${className} thumbnail-fade-in`}
         onError={(e) => {
           e.target.style.display = 'none'
-          e.target.nextElementSibling?.style.display = 'flex'
+if (e.target.nextElementSibling) {
+            e.target.nextElementSibling.style.display = 'flex'
+          }
         }}
       />
     )
