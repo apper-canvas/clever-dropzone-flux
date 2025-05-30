@@ -3,6 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'react-toastify'
 import { formatDistance } from 'date-fns'
 import ApperIcon from './ApperIcon'
+import { 
+  generateThumbnail, 
+  getThumbnailCacheKey, 
+  cacheThumbnail, 
+  getCachedThumbnail 
+} from '../utils/thumbnailGenerator'
 
 const MainFeature = () => {
   const [files, setFiles] = useState([])
@@ -20,6 +26,8 @@ const MainFeature = () => {
   const [newFolderName, setNewFolderName] = useState('')
   const [showNewFolderInput, setShowNewFolderInput] = useState(false)
   const fileInputRef = useRef(null)
+const [thumbnailCache, setThumbnailCache] = useState(new Map())
+  const [loadingThumbnails, setLoadingThumbnails] = useState(new Set())
 
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes'
@@ -62,9 +70,53 @@ const MainFeature = () => {
     
     return true
   }
+const generateFileThumbnail = async (file) => {
+    const cacheKey = getThumbnailCacheKey(file)
+    
+    // Check memory cache first
+    if (thumbnailCache.has(cacheKey)) {
+      return thumbnailCache.get(cacheKey)
+    }
+    
+    // Check localStorage cache
+    const cachedThumbnail = getCachedThumbnail(cacheKey)
+    if (cachedThumbnail) {
+      setThumbnailCache(prev => new Map(prev.set(cacheKey, cachedThumbnail)))
+      return cachedThumbnail
+    }
+    
+    // Generate new thumbnail
+    try {
+      setLoadingThumbnails(prev => new Set(prev.add(cacheKey)))
+      
+      const thumbnail = await generateThumbnail(file, { 
+        width: viewMode === 'grid' ? 200 : 150, 
+        height: viewMode === 'grid' ? 150 : 64,
+        quality: 0.8 
+      })
+      
+      if (thumbnail) {
+        // Cache in memory and localStorage
+        setThumbnailCache(prev => new Map(prev.set(cacheKey, thumbnail)))
+        cacheThumbnail(cacheKey, thumbnail)
+        return thumbnail
+      }
+    } catch (error) {
+      console.error('Error generating thumbnail:', error)
+      toast.error(`Failed to generate thumbnail for ${file.name}`)
+    } finally {
+      setLoadingThumbnails(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(cacheKey)
+        return newSet
+      })
+    }
+    
+    return null
+  }
 
-  const simulateUpload = (file) => {
-    return new Promise((resolve) => {
+const simulateUpload = async (file) => {
+    return new Promise(async (resolve) => {
       let progress = 0
       const uploadId = Date.now() + Math.random()
       
@@ -73,14 +125,21 @@ const MainFeature = () => {
         name: file.name,
         size: file.size,
         progress: 0,
-        status: 'uploading'
+        status: 'uploading',
+        thumbnail: null
       }])
 
-      const interval = setInterval(() => {
+      // Start generating thumbnail while uploading
+      const thumbnailPromise = generateFileThumbnail(file)
+
+      const interval = setInterval(async () => {
         progress += Math.random() * 15 + 5
         if (progress >= 100) {
           progress = 100
           clearInterval(interval)
+          
+          // Wait for thumbnail generation to complete
+          const thumbnail = await thumbnailPromise
           
           setUploadingFiles(prev => prev.filter(f => f.id !== uploadId))
           
@@ -94,11 +153,12 @@ const MainFeature = () => {
             folderId: selectedFolder,
             url: URL.createObjectURL(file),
             isPublic: false,
-            downloadCount: 0
+            downloadCount: 0,
+            thumbnail: thumbnail
           }
           
           setFiles(prev => [...prev, newFile])
-          toast.success(`${file.name} uploaded successfully!`)
+          toast.success(`${file.name} uploaded successfully!${thumbnail ? ' Thumbnail generated!' : ''}`)
           resolve(newFile)
         } else {
           setUploadingFiles(prev => prev.map(f => 
@@ -224,6 +284,38 @@ const MainFeature = () => {
     folder = folders.find(f => f.id === folder.parentId)
   }
 
+const ThumbnailComponent = ({ file, className = "" }) => {
+    const cacheKey = getThumbnailCacheKey(file)
+    const isLoading = loadingThumbnails.has(cacheKey)
+    
+    if (file.thumbnail) {
+      return (
+        <img 
+          src={file.thumbnail} 
+          alt={file.name}
+          className={`${className} thumbnail-fade-in`}
+          onError={(e) => {
+            e.target.style.display = 'none'
+            e.target.nextElementSibling.style.display = 'flex'
+          }}
+        />
+      )
+    }
+    
+    if (isLoading) {
+      return (
+        <div className={`${className.replace('file-thumbnail', 'thumbnail-placeholder')} thumbnail-loading`}>
+          <ApperIcon name="Loader2" className="w-6 h-6 text-surface-400 animate-spin" />
+        </div>
+      )
+    }
+    
+    return (
+      <div className={`${className.replace('file-thumbnail', 'thumbnail-placeholder')}`}>
+        <ApperIcon name={getFileIcon(file.type)} className="w-8 h-8 text-surface-400" />
+      </div>
+    )
+  }
   return (
     <div className="space-y-6">
       {/* Header Controls */}
@@ -484,8 +576,7 @@ const MainFeature = () => {
                 </div>
               </motion.div>
             ))}
-
-            {/* Files */}
+{/* Files */}
             {sortedFiles.map((file) => (
               <motion.div
                 key={file.id}
@@ -496,11 +587,14 @@ const MainFeature = () => {
                   viewMode === 'list' ? 'flex items-center space-x-4' : 'text-center'
                 }`}
               >
-                <div className={`w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center ${
-                  viewMode === 'list' ? 'flex-shrink-0' : 'mx-auto mb-3'
-                }`}>
-                  <ApperIcon name={getFileIcon(file.type)} className="w-6 h-6 text-white" />
+                {/* Thumbnail */}
+                <div className={viewMode === 'list' ? 'flex-shrink-0' : 'mb-3'}>
+                  <ThumbnailComponent 
+                    file={file}
+                    className={viewMode === 'grid' ? 'file-thumbnail-grid' : 'file-thumbnail'}
+                  />
                 </div>
+                
                 <div className={`${viewMode === 'list' ? 'flex-1 min-w-0' : ''}`}>
                   <h4 className="font-medium text-surface-800 truncate" title={file.name}>
                     {file.name}
@@ -520,6 +614,7 @@ const MainFeature = () => {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => downloadFile(file)}
                     className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                    title="Download file"
                   >
                     <ApperIcon name="Download" className="w-4 h-4" />
                   </motion.button>
@@ -528,6 +623,7 @@ const MainFeature = () => {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => deleteFile(file.id)}
                     className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                    title="Delete file"
                   >
                     <ApperIcon name="Trash2" className="w-4 h-4" />
                   </motion.button>

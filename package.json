@@ -24,6 +24,7 @@
     "date-fns": "^4.1.0",
     "react-redux": "^9.2.0",
     "@reduxjs/toolkit": "2.7.0"
+"pdfjs-dist": "^3.11.174",
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
