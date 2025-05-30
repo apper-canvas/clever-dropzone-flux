@@ -705,6 +705,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                     <ApperIcon name="Info" className="w-4 h-4" />
                   </motion.button>
                 </div>
+              </motion.div>
             ))}
           </div>
         )}
