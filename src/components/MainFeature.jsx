@@ -685,18 +685,6 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                   </motion.button>
                 </div>
 {isViewableFile(file) && (
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => openFileViewer(file)}
-                    className="p-2 rounded-lg bg-green-50 text-green-500 hover:bg-green-100 transition-colors"
-                    title="View file"
-                  >
-                    <ApperIcon name="Eye" className="w-4 h-4" />
-                  </motion.button>
-                )}
-                  <motion.button
-{isViewableFile(file) && (
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
@@ -707,6 +695,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                       <ApperIcon name="Eye" className="w-4 h-4" />
                     </motion.button>
                   )}
+                  <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => openFileDetails(file)}
@@ -715,7 +704,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                   >
                     <ApperIcon name="Info" className="w-4 h-4" />
                   </motion.button>
-              </motion.div>
+                </div>
             ))}
           </div>
         )}
