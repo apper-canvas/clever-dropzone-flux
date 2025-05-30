@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import MainFeature from '../components/MainFeature'
+import { Link } from 'react-router-dom'
 import ApperIcon from '../components/ApperIcon'
 
 const Home = () => {
@@ -34,6 +35,16 @@ const Home = () => {
             </motion.div>
             
             <div className="flex items-center space-x-4">
+<Link to="/dashboard">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center space-x-2 px-4 py-2 neu-button text-surface-600 hover:text-primary transition-colors"
+                >
+                  <ApperIcon name="BarChart3" className="w-4 h-4" />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </motion.button>
+              </Link>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
