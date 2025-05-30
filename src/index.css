@@ -1,0 +1,107 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+  * {
+    border-color: theme('colors.surface.200');
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .dropzone-active {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+    border-color: theme('colors.primary.DEFAULT');
+    box-shadow: theme('boxShadow.dropzone');
+  }
+  
+  .file-item {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+  }
+  
+  .file-item:hover {
+    background: rgba(255, 255, 255, 0.9);
+    transform: translateY(-2px);
+    box-shadow: theme('boxShadow.card');
+  }
+  
+  .progress-bar {
+    background: linear-gradient(90deg, theme('colors.primary.DEFAULT'), theme('colors.secondary.DEFAULT'));
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+  
+  .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  
+  .neu-button {
+    background: linear-gradient(145deg, #ffffff, #f0f4f8);
+    box-shadow: 5px 5px 10px #d1d5db, -5px -5px 10px #ffffff;
+    transition: all 0.2s ease;
+  }
+  
+  .neu-button:hover {
+    box-shadow: 2px 2px 5px #d1d5db, -2px -2px 5px #ffffff;
+  }
+  
+  .neu-button:active {
+    box-shadow: inset 2px 2px 5px #d1d5db, inset -2px -2px 5px #ffffff;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .border-gradient {
+    border-image: linear-gradient(135deg, theme('colors.primary.DEFAULT'), theme('colors.secondary.DEFAULT')) 1;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: theme('colors.surface.100');
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, theme('colors.primary.DEFAULT'), theme('colors.secondary.DEFAULT'));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, theme('colors.primary.dark'), theme('colors.secondary.dark'));
+}
+
+/* Toast customization */
+.Toastify__toast {
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.Toastify__progress-bar {
+  background: linear-gradient(90deg, theme('colors.primary.DEFAULT'), theme('colors.secondary.DEFAULT'));
+}
