@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'react-toastify'
 import { formatDistance } from 'date-fns'
 import ApperIcon from './ApperIcon'
+import FileDetailsModal from './FileDetailsModal'
 import { 
   generateThumbnail, 
   getThumbnailCacheKey, 
   cacheThumbnail, 
   getCachedThumbnail 
 } from '../utils/thumbnailGenerator'
+import { storeFileVersion } from '../utils/versionStorage'
 
 const MainFeature = () => {
   const [files, setFiles] = useState([])
@@ -27,7 +29,9 @@ const MainFeature = () => {
   const [showNewFolderInput, setShowNewFolderInput] = useState(false)
   const fileInputRef = useRef(null)
 const [thumbnailCache, setThumbnailCache] = useState(new Map())
-  const [loadingThumbnails, setLoadingThumbnails] = useState(new Set())
+const [loadingThumbnails, setLoadingThumbnails] = useState(new Set())
+const [showFileDetails, setShowFileDetails] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
 
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes'
@@ -251,6 +255,29 @@ const simulateUpload = async (file) => {
   const cancelUpload = (uploadId) => {
     setUploadingFiles(prev => prev.filter(f => f.id !== uploadId))
     toast.info('Upload cancelled')
+  }
+const openFileDetails = (file) => {
+    setSelectedFile(file)
+    setShowFileDetails(true)
+  }
+
+  const closeFileDetails = () => {
+    setShowFileDetails(false)
+    setSelectedFile(null)
+  }
+
+  const handleFileUpdate = (updatedFile) => {
+    // Store current version before updating
+    const currentFile = files.find(f => f.id === updatedFile.id)
+    if (currentFile) {
+      storeFileVersion(currentFile, 'File updated')
+    }
+
+    setFiles(prev => prev.map(f => 
+      f.id === updatedFile.id ? updatedFile : f
+    ))
+    
+    toast.success('File updated successfully!')
   }
 
   const getCurrentFolderFiles = () => {
@@ -628,11 +655,27 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                     <ApperIcon name="Trash2" className="w-4 h-4" />
                   </motion.button>
                 </div>
+<motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => openFileDetails(file)}
+                    className="p-2 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-colors"
+                    title="View file details"
+                  >
+                    <ApperIcon name="Info" className="w-4 h-4" />
+                  </motion.button>
               </motion.div>
             ))}
           </div>
         )}
       </motion.div>
+{/* File Details Modal */}
+      <FileDetailsModal
+        isOpen={showFileDetails}
+        onClose={closeFileDetails}
+        file={selectedFile}
+        onFileUpdate={handleFileUpdate}
+      />
     </div>
   )
 }
