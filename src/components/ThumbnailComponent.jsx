@@ -1,4 +1,4 @@
-import { ApperIcon } from './ApperIcon'
+import ApperIcon from './ApperIcon'
 import { getThumbnailCacheKey } from '../utils/thumbnailGenerator'
 
 const ThumbnailComponent = ({ file, className = "", loadingThumbnails = new Set() }) => {
