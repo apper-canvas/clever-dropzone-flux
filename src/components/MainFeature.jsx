@@ -1,193 +1,44 @@
 import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { toast } from 'react-toastify'
 import { formatDistance } from 'date-fns'
 import ApperIcon from './ApperIcon'
 import FileDetailsModal from './FileDetailsModal'
 import FileViewer from './FileViewer'
-import {
-  generateThumbnail, 
-  getThumbnailCacheKey, 
-  cacheThumbnail, 
-  getCachedThumbnail 
-} from '../utils/thumbnailGenerator'
-import { storeFileVersion } from '../utils/versionStorage'
+import ThumbnailComponent from './ThumbnailComponent'
+import { useFileManager } from '../hooks/useFileManager'
+import { useThumbnails } from '../hooks/useThumbnails'
+import { formatFileSize, isViewableFile, sortFiles } from '../utils/fileUtils'
 
 const MainFeature = () => {
-  const [files, setFiles] = useState([])
-  const [uploadingFiles, setUploadingFiles] = useState([])
   const [dragActive, setDragActive] = useState(false)
-  const [selectedFolder, setSelectedFolder] = useState('root')
-  const [folders, setFolders] = useState([
-    { id: 'root', name: 'My Files', parentId: null, fileCount: 0, totalSize: 0 },
-    { id: 'documents', name: 'Documents', parentId: 'root', fileCount: 0, totalSize: 0 },
-    { id: 'images', name: 'Images', parentId: 'root', fileCount: 0, totalSize: 0 },
-    { id: 'videos', name: 'Videos', parentId: 'root', fileCount: 0, totalSize: 0 }
-  ])
   const [viewMode, setViewMode] = useState('grid')
   const [sortBy, setSortBy] = useState('name')
   const [newFolderName, setNewFolderName] = useState('')
   const [showNewFolderInput, setShowNewFolderInput] = useState(false)
-  const fileInputRef = useRef(null)
-const [thumbnailCache, setThumbnailCache] = useState(new Map())
-const [loadingThumbnails, setLoadingThumbnails] = useState(new Set())
-const [showFileDetails, setShowFileDetails] = useState(false)
+  const [showFileDetails, setShowFileDetails] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
-
-const [showFileViewer, setShowFileViewer] = useState(false)
+  const [showFileViewer, setShowFileViewer] = useState(false)
   const [viewerFile, setViewerFile] = useState(null)
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
-  const getFileIcon = (type) => {
-    if (type.startsWith('image/')) return 'Image'
-    if (type.startsWith('video/')) return 'Video'
-    if (type.startsWith('audio/')) return 'Music'
-    if (type.includes('pdf')) return 'FileText'
-    if (type.includes('document') || type.includes('word')) return 'FileText'
-    if (type.includes('spreadsheet') || type.includes('excel')) return 'FileSpreadsheet'
-    if (type.includes('presentation') || type.includes('powerpoint')) return 'FileImage'
-    if (type.includes('zip') || type.includes('rar')) return 'Archive'
-    return 'File'
-  }
-
-  const validateFile = (file) => {
-    const maxSize = 100 * 1024 * 1024 // 100MB
-    const allowedTypes = [
-      'image/', 'video/', 'audio/', 'application/pdf', 
-      'application/msword', 'application/vnd.openxmlformats',
-      'text/', 'application/zip', 'application/x-rar'
-    ]
-    
-    if (file.size > maxSize) {
-      toast.error(`File ${file.name} is too large. Maximum size is 100MB.`)
-      return false
-    }
-    
-    const isAllowed = allowedTypes.some(type => file.type.startsWith(type))
-    if (!isAllowed) {
-      toast.error(`File type ${file.type} is not supported.`)
-      return false
-    }
-    
-    return true
-  }
-const generateFileThumbnail = async (file) => {
-    const cacheKey = getThumbnailCacheKey(file)
-    
-    // Check memory cache first
-    if (thumbnailCache.has(cacheKey)) {
-      return thumbnailCache.get(cacheKey)
-    }
-    
-    // Check localStorage cache
-    const cachedThumbnail = getCachedThumbnail(cacheKey)
-    if (cachedThumbnail) {
-      setThumbnailCache(prev => new Map(prev.set(cacheKey, cachedThumbnail)))
-      return cachedThumbnail
-    }
-    
-    // Generate new thumbnail
-    try {
-      setLoadingThumbnails(prev => new Set(prev.add(cacheKey)))
-      
-      const thumbnail = await generateThumbnail(file, { 
-        width: viewMode === 'grid' ? 200 : 150, 
-        height: viewMode === 'grid' ? 150 : 64,
-        quality: 0.8 
-      })
-      
-      if (thumbnail) {
-        // Cache in memory and localStorage
-        setThumbnailCache(prev => new Map(prev.set(cacheKey, thumbnail)))
-        cacheThumbnail(cacheKey, thumbnail)
-        return thumbnail
-      }
-    } catch (error) {
-      console.error('Error generating thumbnail:', error)
-      toast.error(`Failed to generate thumbnail for ${file.name}`)
-    } finally {
-      setLoadingThumbnails(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(cacheKey)
-        return newSet
-      })
-    }
-    
-    return null
-  }
-
-const simulateUpload = async (file) => {
-    return new Promise(async (resolve) => {
-      let progress = 0
-      const uploadId = Date.now() + Math.random()
-      
-      setUploadingFiles(prev => [...prev, {
-        id: uploadId,
-        name: file.name,
-        size: file.size,
-        progress: 0,
-        status: 'uploading',
-        thumbnail: null
-      }])
-
-      // Start generating thumbnail while uploading
-      const thumbnailPromise = generateFileThumbnail(file)
-
-      const interval = setInterval(async () => {
-        progress += Math.random() * 15 + 5
-        if (progress >= 100) {
-          progress = 100
-          clearInterval(interval)
-          
-          // Wait for thumbnail generation to complete
-          const thumbnail = await thumbnailPromise
-          
-          setUploadingFiles(prev => prev.filter(f => f.id !== uploadId))
-          
-          const newFile = {
-            id: Date.now() + Math.random(),
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            uploadDate: new Date(),
-            lastModified: new Date(file.lastModified),
-            folderId: selectedFolder,
-            url: URL.createObjectURL(file),
-            isPublic: false,
-            downloadCount: 0,
-            thumbnail: thumbnail
-          }
-          
-          setFiles(prev => [...prev, newFile])
-          toast.success(`${file.name} uploaded successfully!${thumbnail ? ' Thumbnail generated!' : ''}`)
-          resolve(newFile)
-        } else {
-          setUploadingFiles(prev => prev.map(f => 
-            f.id === uploadId ? { ...f, progress } : f
-          ))
-        }
-      }, 200)
-    })
-  }
-
-  const handleFiles = async (fileList) => {
-    const validFiles = Array.from(fileList).filter(validateFile)
-    
-    if (validFiles.length === 0) return
-    
-    toast.info(`Starting upload of ${validFiles.length} file(s)...`)
-    
-    for (const file of validFiles) {
-      await simulateUpload(file)
-    }
-  }
-
+  
+  const fileInputRef = useRef(null)
+  
+  const {
+    uploadingFiles,
+    selectedFolder,
+    setSelectedFolder,
+    handleFiles,
+    deleteFile,
+    downloadFile,
+    createFolder,
+    cancelUpload,
+    handleFileUpdate,
+    getCurrentFolderFiles,
+    getCurrentSubfolders,
+    getBreadcrumb
+  } = useFileManager()
+  
+  const { loadingThumbnails, generateFileThumbnail } = useThumbnails(viewMode)
+  
   const handleDrag = useCallback((e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -204,174 +55,51 @@ const simulateUpload = async (file) => {
     setDragActive(false)
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFiles(e.dataTransfer.files)
+      handleFiles(e.dataTransfer.files, generateFileThumbnail)
     }
-  }, [selectedFolder])
+  }, [handleFiles, generateFileThumbnail])
 
-  const handleFileInput = (e) => {
+  const handleFileInput = useCallback((e) => {
     if (e.target.files && e.target.files[0]) {
-      handleFiles(e.target.files)
+      handleFiles(e.target.files, generateFileThumbnail)
     }
-  }
+  }, [handleFiles, generateFileThumbnail])
 
-  const deleteFile = (fileId) => {
-    const file = files.find(f => f.id === fileId)
-    setFiles(prev => prev.filter(f => f.id !== fileId))
-    toast.success(`${file.name} deleted successfully!`)
-  }
-
-  const downloadFile = (file) => {
-    const link = document.createElement('a')
-    link.href = file.url
-    link.download = file.name
-    link.click()
-    
-    setFiles(prev => prev.map(f => 
-      f.id === file.id 
-        ? { ...f, downloadCount: f.downloadCount + 1 }
-        : f
-    ))
-    toast.info(`Downloading ${file.name}...`)
-  }
-
-  const createFolder = () => {
-    if (!newFolderName.trim()) {
-      toast.error('Please enter a folder name')
-      return
+  const handleCreateFolder = useCallback(() => {
+    if (createFolder(newFolderName)) {
+      setNewFolderName('')
+      setShowNewFolderInput(false)
     }
-    
-    const newFolder = {
-      id: Date.now().toString(),
-      name: newFolderName.trim(),
-      parentId: selectedFolder,
-      fileCount: 0,
-      totalSize: 0,
-      createdDate: new Date()
-    }
-    
-    setFolders(prev => [...prev, newFolder])
-    setNewFolderName('')
-    setShowNewFolderInput(false)
-    toast.success(`Folder "${newFolder.name}" created successfully!`)
-  }
+  }, [createFolder, newFolderName])
 
-  const cancelUpload = (uploadId) => {
-    setUploadingFiles(prev => prev.filter(f => f.id !== uploadId))
-    toast.info('Upload cancelled')
-  }
-const openFileDetails = (file) => {
+  const openFileDetails = useCallback((file) => {
     setSelectedFile(file)
     setShowFileDetails(true)
-  }
+  }, [])
 
-  const closeFileDetails = () => {
+  const closeFileDetails = useCallback(() => {
     setShowFileDetails(false)
     setSelectedFile(null)
-  }
+  }, [])
 
-  const handleFileUpdate = (updatedFile) => {
-    // Store current version before updating
-    const currentFile = files.find(f => f.id === updatedFile.id)
-    if (currentFile) {
-      storeFileVersion(currentFile, 'File updated')
-    }
-
-    setFiles(prev => prev.map(f => 
-      f.id === updatedFile.id ? updatedFile : f
-    ))
-    
-    toast.success('File updated successfully!')
-  }
-
-const openFileViewer = (file) => {
+  const openFileViewer = useCallback((file) => {
     setViewerFile(file)
     setShowFileViewer(true)
-  }
+  }, [])
 
-  const closeFileViewer = () => {
+  const closeFileViewer = useCallback(() => {
     setShowFileViewer(false)
     setViewerFile(null)
-  }
+  }, [])
 
-  const handleViewerNavigate = (newFile) => {
+  const handleViewerNavigate = useCallback((newFile) => {
     setViewerFile(newFile)
-  }
+  }, [])
 
-  const isViewableFile = (file) => {
-    const viewableTypes = [
-      'image/', 'video/', 'audio/', 'application/pdf', 'text/'
-    ]
-    return viewableTypes.some(type => file.type.startsWith(type)) || 
-           isTextFile(file.name)
-  }
+  const sortedFiles = sortFiles(getCurrentFolderFiles(), sortBy)
+  const subfolders = getCurrentSubfolders()
+  const breadcrumb = getBreadcrumb()
 
-  const isTextFile = (filename) => {
-    const textExtensions = ['.txt', '.md', '.json', '.js', '.jsx', '.ts', '.tsx', '.css', '.html', '.xml', '.csv']
-    return textExtensions.some(ext => filename.toLowerCase().endsWith(ext))
-  }
-  const getCurrentFolderFiles = () => {
-    return files.filter(file => file.folderId === selectedFolder)
-  }
-
-  const getCurrentSubfolders = () => {
-    return folders.filter(folder => folder.parentId === selectedFolder)
-  }
-
-  const sortedFiles = getCurrentFolderFiles().sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return a.name.localeCompare(b.name)
-      case 'date':
-        return new Date(b.uploadDate) - new Date(a.uploadDate)
-      case 'size':
-        return b.size - a.size
-      case 'type':
-        return a.type.localeCompare(b.type)
-      default:
-        return 0
-    }
-  })
-
-  const currentFolder = folders.find(f => f.id === selectedFolder)
-  const breadcrumb = []
-  let folder = currentFolder
-  while (folder) {
-    breadcrumb.unshift(folder)
-    folder = folders.find(f => f.id === folder.parentId)
-  }
-
-const ThumbnailComponent = ({ file, className = "" }) => {
-    const cacheKey = getThumbnailCacheKey(file)
-    const isLoading = loadingThumbnails.has(cacheKey)
-    
-    if (file.thumbnail) {
-      return (
-        <img 
-          src={file.thumbnail} 
-          alt={file.name}
-          className={`${className} thumbnail-fade-in`}
-          onError={(e) => {
-            e.target.style.display = 'none'
-            e.target.nextElementSibling.style.display = 'flex'
-          }}
-        />
-      )
-    }
-    
-    if (isLoading) {
-      return (
-        <div className={`${className.replace('file-thumbnail', 'thumbnail-placeholder')} thumbnail-loading`}>
-          <ApperIcon name="Loader2" className="w-6 h-6 text-surface-400 animate-spin" />
-        </div>
-      )
-    }
-    
-    return (
-      <div className={`${className.replace('file-thumbnail', 'thumbnail-placeholder')}`}>
-        <ApperIcon name={getFileIcon(file.type)} className="w-8 h-8 text-surface-400" />
-      </div>
-    )
-  }
   return (
     <div className="space-y-6">
       {/* Header Controls */}
@@ -383,19 +111,20 @@ const ThumbnailComponent = ({ file, className = "" }) => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
           <div className="space-y-2">
             <h2 className="text-2xl font-bold text-surface-800">File Manager</h2>
-            <div className="flex items-center space-x-2 text-sm text-surface-600">
+            <nav className="flex items-center space-x-2 text-sm text-surface-600" aria-label="Breadcrumb">
               {breadcrumb.map((folder, index) => (
                 <div key={folder.id} className="flex items-center space-x-2">
                   {index > 0 && <ApperIcon name="ChevronRight" className="w-4 h-4" />}
                   <button 
                     onClick={() => setSelectedFolder(folder.id)}
-                    className="hover:text-primary transition-colors"
+                    className="hover:text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 rounded px-1"
+                    aria-current={index === breadcrumb.length - 1 ? 'page' : undefined}
                   >
                     {folder.name}
                   </button>
                 </div>
               ))}
-            </div>
+            </nav>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
@@ -403,6 +132,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
               value={sortBy} 
               onChange={(e) => setSortBy(e.target.value)}
               className="px-3 py-2 rounded-lg neu-button text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              aria-label="Sort files by"
             >
               <option value="name">Sort by Name</option>
               <option value="date">Sort by Date</option>
@@ -410,16 +140,20 @@ const ThumbnailComponent = ({ file, className = "" }) => {
               <option value="type">Sort by Type</option>
             </select>
             
-            <div className="flex rounded-lg overflow-hidden neu-button">
+            <div className="flex rounded-lg overflow-hidden neu-button" role="group" aria-label="View mode">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-2 ${viewMode === 'grid' ? 'bg-primary text-white' : 'text-surface-600'}`}
+                aria-pressed={viewMode === 'grid'}
+                title="Grid view"
               >
                 <ApperIcon name="Grid3X3" className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 ${viewMode === 'list' ? 'bg-primary text-white' : 'text-surface-600'}`}
+                aria-pressed={viewMode === 'list'}
+                title="List view"
               >
                 <ApperIcon name="List" className="w-4 h-4" />
               </button>
@@ -429,7 +163,8 @@ const ThumbnailComponent = ({ file, className = "" }) => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowNewFolderInput(!showNewFolderInput)}
-              className="flex items-center space-x-2 px-4 py-2 bg-secondary text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+              className="flex items-center space-x-2 px-4 py-2 bg-secondary text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-secondary/50"
+              aria-expanded={showNewFolderInput}
             >
               <ApperIcon name="FolderPlus" className="w-4 h-4" />
               <span className="hidden sm:inline">New Folder</span>
@@ -452,12 +187,13 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="Enter folder name"
                 className="flex-1 px-4 py-2 rounded-lg border border-surface-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                onKeyPress={(e) => e.key === 'Enter' && createFolder()}
+                onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder()}
+                aria-label="New folder name"
               />
               <div className="flex gap-2">
                 <button
-                  onClick={createFolder}
-                  className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors"
+                  onClick={handleCreateFolder}
+                  className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors focus:outline-none focus:ring-2 focus:ring-accent/50"
                 >
                   Create
                 </button>
@@ -466,7 +202,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                     setShowNewFolderInput(false)
                     setNewFolderName('')
                   }}
-                  className="px-4 py-2 border border-surface-300 text-surface-600 rounded-lg hover:bg-surface-50 transition-colors"
+                  className="px-4 py-2 border border-surface-300 text-surface-600 rounded-lg hover:bg-surface-50 transition-colors focus:outline-none focus:ring-2 focus:ring-surface-300"
                 >
                   Cancel
                 </button>
@@ -490,6 +226,15 @@ const ThumbnailComponent = ({ file, className = "" }) => {
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
+        role="button"
+        tabIndex={0}
+        aria-label="File upload area"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            fileInputRef.current?.click()
+          }
+        }}
       >
         <div className="p-8 sm:p-12 text-center">
           <motion.div
@@ -510,7 +255,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
           >
             <ApperIcon name="Plus" className="w-5 h-5" />
             <span>Choose Files</span>
@@ -523,6 +268,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
             onChange={handleFileInput}
             className="hidden"
             accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar"
+            aria-label="File input"
           />
           
           <p className="text-xs text-surface-500 mt-4">
@@ -557,7 +303,8 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                       <span className="text-sm font-medium text-surface-800">{file.name}</span>
                       <button
                         onClick={() => cancelUpload(file.id)}
-                        className="text-surface-400 hover:text-red-500 transition-colors"
+                        className="text-surface-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-red-300 rounded"
+                        title="Cancel upload"
                       >
                         <ApperIcon name="X" className="w-4 h-4" />
                       </button>
@@ -589,7 +336,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
         transition={{ delay: 0.2 }}
         className="glass-card rounded-2xl p-6 border border-white/20"
       >
-        {getCurrentSubfolders().length === 0 && sortedFiles.length === 0 ? (
+        {subfolders.length === 0 && sortedFiles.length === 0 ? (
           <div className="text-center py-12">
             <motion.div
               animate={{ y: [0, -10, 0] }}
@@ -608,16 +355,25 @@ const ThumbnailComponent = ({ file, className = "" }) => {
               : 'space-y-2'
           }>
             {/* Folders */}
-            {getCurrentSubfolders().map((folder) => (
+            {subfolders.map((folder) => (
               <motion.div
                 key={folder.id}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 whileHover={{ scale: 1.02 }}
-                className={`file-item p-4 rounded-xl cursor-pointer ${
+                className={`file-item p-4 rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                   viewMode === 'list' ? 'flex items-center space-x-4' : 'text-center'
                 }`}
                 onClick={() => setSelectedFolder(folder.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedFolder(folder.id)
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={`Open folder ${folder.name}`}
               >
                 <div className={`w-12 h-12 rounded-lg bg-gradient-to-br from-secondary to-purple-600 flex items-center justify-center ${
                   viewMode === 'list' ? 'flex-shrink-0' : 'mx-auto mb-3'
@@ -632,7 +388,8 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                 </div>
               </motion.div>
             ))}
-{/* Files */}
+
+            {/* Files */}
             {sortedFiles.map((file) => (
               <motion.div
                 key={file.id}
@@ -648,6 +405,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                   <ThumbnailComponent 
                     file={file}
                     className={viewMode === 'grid' ? 'file-thumbnail-grid' : 'file-thumbnail'}
+                    loadingThumbnails={loadingThumbnails}
                   />
                 </div>
                 
@@ -662,6 +420,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                     {formatDistance(file.uploadDate, new Date(), { addSuffix: true })}
                   </p>
                 </div>
+                
                 <div className={`flex items-center space-x-2 ${
                   viewMode === 'list' ? '' : 'mt-3 justify-center'
                 }`}>
@@ -669,38 +428,44 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => downloadFile(file)}
-                    className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                    className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors focus:outline-none focus:ring-2 focus:ring-accent/50"
                     title="Download file"
+                    aria-label={`Download ${file.name}`}
                   >
                     <ApperIcon name="Download" className="w-4 h-4" />
                   </motion.button>
+                  
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => deleteFile(file.id)}
-                    className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                    className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors focus:outline-none focus:ring-2 focus:ring-red-300"
                     title="Delete file"
+                    aria-label={`Delete ${file.name}`}
                   >
                     <ApperIcon name="Trash2" className="w-4 h-4" />
                   </motion.button>
-                </div>
-{isViewableFile(file) && (
+                  
+                  {isViewableFile(file) && (
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
                       onClick={() => openFileViewer(file)}
-                      className="p-2 rounded-lg bg-green-50 text-green-500 hover:bg-green-100 transition-colors"
+                      className="p-2 rounded-lg bg-green-50 text-green-500 hover:bg-green-100 transition-colors focus:outline-none focus:ring-2 focus:ring-green-300"
                       title="View file"
+                      aria-label={`View ${file.name}`}
                     >
                       <ApperIcon name="Eye" className="w-4 h-4" />
                     </motion.button>
                   )}
+                  
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => openFileDetails(file)}
-                    className="p-2 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-colors"
+                    className="p-2 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300"
                     title="View file details"
+                    aria-label={`View details for ${file.name}`}
                   >
                     <ApperIcon name="Info" className="w-4 h-4" />
                   </motion.button>
@@ -710,15 +475,16 @@ const ThumbnailComponent = ({ file, className = "" }) => {
           </div>
         )}
       </motion.div>
-{/* File Details Modal */}
+
+      {/* File Details Modal */}
       <FileDetailsModal
         isOpen={showFileDetails}
         onClose={closeFileDetails}
         file={selectedFile}
         onFileUpdate={handleFileUpdate}
       />
-    </div>
-{/* File Viewer */}
+
+      {/* File Viewer */}
       <FileViewer
         isOpen={showFileViewer}
         onClose={closeFileViewer}
@@ -726,6 +492,7 @@ const ThumbnailComponent = ({ file, className = "" }) => {
         files={sortedFiles}
         onNavigate={handleViewerNavigate}
       />
+    </div>
   )
 }
 
