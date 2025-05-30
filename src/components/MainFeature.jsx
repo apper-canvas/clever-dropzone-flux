@@ -4,7 +4,8 @@ import { toast } from 'react-toastify'
 import { formatDistance } from 'date-fns'
 import ApperIcon from './ApperIcon'
 import FileDetailsModal from './FileDetailsModal'
-import { 
+import FileViewer from './FileViewer'
+import {
   generateThumbnail, 
   getThumbnailCacheKey, 
   cacheThumbnail, 
@@ -33,6 +34,8 @@ const [loadingThumbnails, setLoadingThumbnails] = useState(new Set())
 const [showFileDetails, setShowFileDetails] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
 
+const [showFileViewer, setShowFileViewer] = useState(false)
+  const [viewerFile, setViewerFile] = useState(null)
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes'
     const k = 1024
@@ -280,6 +283,32 @@ const openFileDetails = (file) => {
     toast.success('File updated successfully!')
   }
 
+const openFileViewer = (file) => {
+    setViewerFile(file)
+    setShowFileViewer(true)
+  }
+
+  const closeFileViewer = () => {
+    setShowFileViewer(false)
+    setViewerFile(null)
+  }
+
+  const handleViewerNavigate = (newFile) => {
+    setViewerFile(newFile)
+  }
+
+  const isViewableFile = (file) => {
+    const viewableTypes = [
+      'image/', 'video/', 'audio/', 'application/pdf', 'text/'
+    ]
+    return viewableTypes.some(type => file.type.startsWith(type)) || 
+           isTextFile(file.name)
+  }
+
+  const isTextFile = (filename) => {
+    const textExtensions = ['.txt', '.md', '.json', '.js', '.jsx', '.ts', '.tsx', '.css', '.html', '.xml', '.csv']
+    return textExtensions.some(ext => filename.toLowerCase().endsWith(ext))
+  }
   const getCurrentFolderFiles = () => {
     return files.filter(file => file.folderId === selectedFolder)
   }
@@ -655,7 +684,29 @@ const ThumbnailComponent = ({ file, className = "" }) => {
                     <ApperIcon name="Trash2" className="w-4 h-4" />
                   </motion.button>
                 </div>
-<motion.button
+{isViewableFile(file) && (
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => openFileViewer(file)}
+                    className="p-2 rounded-lg bg-green-50 text-green-500 hover:bg-green-100 transition-colors"
+                    title="View file"
+                  >
+                    <ApperIcon name="Eye" className="w-4 h-4" />
+                  </motion.button>
+                )}
+                  <motion.button
+{isViewableFile(file) && (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => openFileViewer(file)}
+                      className="p-2 rounded-lg bg-green-50 text-green-500 hover:bg-green-100 transition-colors"
+                      title="View file"
+                    >
+                      <ApperIcon name="Eye" className="w-4 h-4" />
+                    </motion.button>
+                  )}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => openFileDetails(file)}
@@ -677,6 +728,14 @@ const ThumbnailComponent = ({ file, className = "" }) => {
         onFileUpdate={handleFileUpdate}
       />
     </div>
+{/* File Viewer */}
+      <FileViewer
+        isOpen={showFileViewer}
+        onClose={closeFileViewer}
+        file={viewerFile}
+        files={sortedFiles}
+        onNavigate={handleViewerNavigate}
+      />
   )
 }
 
