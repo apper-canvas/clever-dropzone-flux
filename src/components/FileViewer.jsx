@@ -241,12 +241,24 @@ const FileViewer = ({ isOpen, onClose, file, files, onNavigate }) => {
     setImageRotation(0)
   }
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen()
-      setIsFullscreen(true)
-    } else {
-      document.exitFullscreen()
+const toggleFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (containerRef.current?.requestFullscreen) {
+          containerRef.current.requestFullscreen()
+          setIsFullscreen(true)
+        } else {
+          toast.warn('Fullscreen mode is not available in this environment')
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen()
+          setIsFullscreen(false)
+        }
+      }
+    } catch (error) {
+      console.warn('Fullscreen API blocked by permissions policy:', error)
+      toast.warn('Fullscreen mode is not available due to browser restrictions')
       setIsFullscreen(false)
     }
   }
